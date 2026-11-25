@@ -13,12 +13,13 @@ defmodule QuantumBilling.CustomFields.FieldDefinition do
 
   alias QuantumBilling.Money
 
-  @objects ~w(client invoice invoice_item credit_note e_way_bill recurring_profile)
+  @objects ~w(client invoice invoice_item quotation quotation_item credit_note e_way_bill
+                recurring_profile)
   @types ~w(text long_text number money date boolean select multi_select email phone url)
   @choice_types ~w(select multi_select)
   @filterable_types ~w(select multi_select boolean)
   # An invoice prints its own and its lines' fields; the client's live ones never.
-  @printable_objects ~w(invoice invoice_item)
+  @printable_objects ~w(invoice invoice_item quotation quotation_item)
   # Only these objects have a list page with columns and filters.
   @listed_objects ~w(client invoice)
   @colors ~w(gray blue green amber red violet)

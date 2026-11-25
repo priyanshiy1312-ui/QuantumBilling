@@ -22,6 +22,8 @@ defmodule QuantumBilling.CustomFields do
     {"client", "Clients", "clients"},
     {"invoice", "Invoices", "invoices"},
     {"invoice_item", "Invoice items", "invoice_items"},
+    {"quotation", "Quotations", "quotations"},
+    {"quotation_item", "Quotation items", "quotation_items"},
     {"credit_note", "Credit notes", "credit_notes"},
     {"e_way_bill", "E-way bills", "e_way_bills"},
     {"recurring_profile", "Recurring profiles", "recurring_profiles"}
@@ -34,6 +36,63 @@ defmodule QuantumBilling.CustomFields do
   def objects, do: Enum.map(@objects, fn {object, label, _table} -> {object, label} end)
 
   def max_active, do: @max_active
+
+  # The schema behind each object, for its built-in fields and record count.
+  @schemas %{
+    "client" => QuantumBilling.Clients.Client,
+    "invoice" => QuantumBilling.Invoices.Invoice,
+    "invoice_item" => QuantumBilling.Invoices.InvoiceItem,
+    "quotation" => QuantumBilling.Quotations.Quotation,
+    "quotation_item" => QuantumBilling.Quotations.QuotationItem,
+    "credit_note" => QuantumBilling.CreditNotes.CreditNote,
+    "e_way_bill" => QuantumBilling.EWayBills.EWayBill,
+    "recurring_profile" => QuantumBilling.Recurring.RecurringProfile
+  }
+
+  # Bookkeeping columns, not fields anyone fills in.
+  @internal_fields [:id, :custom_fields, :inserted_at, :updated_at, :deleted_at]
+
+  @doc """
+  The fields QuantumBilling gives `object`, read from its schema, as maps with
+  `:key` and `:type` (`:text`, `:number`, `:money`, `:date`, `:boolean`,
+  `:link` or `:other`). They cannot be changed.
+  """
+  def standard_fields(object) do
+    schema = Map.fetch!(@schemas, object)
+
+    for field <- schema.__schema__(:fields), field not in @internal_fields do
+      %{key: Atom.to_string(field), type: standard_type(field, schema.__schema__(:type, field))}
+    end
+  end
+
+  defp standard_type(field, type) do
+    name = Atom.to_string(field)
+
+    cond do
+      String.ends_with?(name, "_id") -> :link
+      type in [:string, :binary] -> :text
+      type in [:integer, :decimal, :float] -> :number
+      type in [:date, :utc_datetime, :naive_datetime, :utc_datetime_usec] -> :date
+      type == :boolean -> :boolean
+      is_atom(type) and String.ends_with?(inspect(type), "Paise") -> :money
+      true -> :other
+    end
+  end
+
+  @doc """
+  How many records of each object the current business has, as
+  `%{object => count}`. Records in the bin are left out.
+  """
+  def record_counts do
+    Map.new(@schemas, fn {object, schema} ->
+      query =
+        if :deleted_at in schema.__schema__(:fields),
+          do: from(r in schema, where: is_nil(r.deleted_at)),
+          else: from(r in schema)
+
+      {object, Repo.aggregate(query, :count)}
+    end)
+  end
 
   @doc """
   The object's fields in position order.

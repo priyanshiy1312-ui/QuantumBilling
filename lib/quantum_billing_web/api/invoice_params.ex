@@ -31,16 +31,23 @@ defmodule QuantumBillingWeb.API.InvoiceParams do
   (less the client snapshot), or `{:error, fields}`. `regime` is the
   business's, `"gst"` or `"vat"`.
   """
-  def cast(body, regime \\ "gst")
+  def cast(body, regime \\ "gst"),
+    do: cast_document(body, regime, %{top: @top, object: "invoice", item_object: "invoice_item"})
 
-  def cast(%{} = body, regime) do
+  @doc """
+  `cast/2` for another document with invoice-style lines (a quotation):
+  `spec` names its allowed top-level fields (`:top`, with `client_id`,
+  `items` and `custom_fields`) and its custom-field objects (`:object`,
+  `:item_object`).
+  """
+  def cast_document(%{} = body, regime, %{top: top, object: object, item_object: item_object}) do
     {top_extra, item_extra} = Map.get(@regime_fields, regime, @regime_fields["gst"])
-    top = @top ++ top_extra
+    top = top ++ top_extra
 
     with :ok <- refuse_unknown(body, top, "", regime),
          {:ok, client_id} <- client_id(body["client_id"]),
-         {:ok, custom} <- custom_fields(body["custom_fields"], "invoice", "custom_fields."),
-         {:ok, items} <- items(body["items"], @item ++ item_extra, regime) do
+         {:ok, custom} <- custom_fields(body["custom_fields"], object, "custom_fields."),
+         {:ok, items} <- items(body["items"], @item ++ item_extra, regime, item_object) do
       attrs =
         body
         |> Map.take(top -- ["client_id", "items", "custom_fields"])
@@ -52,7 +59,7 @@ defmodule QuantumBillingWeb.API.InvoiceParams do
     end
   end
 
-  def cast(_body, _regime), do: {:error, %{"body" => ["must be a JSON object"]}}
+  def cast_document(_body, _regime, _spec), do: {:error, %{"body" => ["must be a JSON object"]}}
 
   defp refuse_unknown(map, allowed, path, regime) do
     case map |> Map.keys() |> Enum.reject(&(&1 in allowed)) do
@@ -91,7 +98,7 @@ defmodule QuantumBillingWeb.API.InvoiceParams do
   defp put_custom(attrs, nil), do: attrs
   defp put_custom(attrs, custom), do: Map.put(attrs, "custom_fields", custom)
 
-  defp items(items, allowed, regime)
+  defp items(items, allowed, regime, item_object)
        when is_list(items) and items != [] and length(items) <= @max_items do
     items
     |> Enum.with_index()
@@ -102,7 +109,7 @@ defmodule QuantumBillingWeb.API.InvoiceParams do
         with :ok <- refuse_unknown(item, allowed, path, regime),
              {:ok, rate} <- rate(item["rate"], index),
              {:ok, custom} <-
-               custom_fields(item["custom_fields"], "invoice_item", path <> "custom_fields.") do
+               custom_fields(item["custom_fields"], item_object, path <> "custom_fields.") do
           attrs =
             item
             |> Map.take(allowed -- ["custom_fields"])
@@ -121,10 +128,11 @@ defmodule QuantumBillingWeb.API.InvoiceParams do
     end)
   end
 
-  defp items(items, _allowed, _regime) when is_list(items) and length(items) > @max_items,
-    do: {:error, %{"items" => ["can contain at most #{@max_items} lines"]}}
+  defp items(items, _allowed, _regime, _item_object)
+       when is_list(items) and length(items) > @max_items,
+       do: {:error, %{"items" => ["can contain at most #{@max_items} lines"]}}
 
-  defp items(_items, _allowed, _regime),
+  defp items(_items, _allowed, _regime, _item_object),
     do: {:error, %{"items" => ["must be a non-empty list of lines"]}}
 
   # API amounts are integer paise; the changeset expects rupees, so 125050 becomes "1250.50".

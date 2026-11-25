@@ -148,19 +148,20 @@ defmodule QuantumBilling.Invoices.InvoiceItem do
   end
 
   @doc """
-  The line's amount before tax, in paise.
+  The line's amount before tax, in paise. Takes any line with the item fields
+  (an invoice item or a quotation item).
   """
-  def amount(%__MODULE__{quantity: quantity, rate: rate}), do: Money.line_amount(quantity, rate)
+  def amount(%{quantity: quantity, rate: rate}), do: Money.line_amount(quantity, rate)
 
   def amount(_item), do: 0
 
   @doc """
   The tax due on this line, at its own rate, in paise.
   """
-  def tax(%__MODULE__{tax_rate_bp: rate_bp} = item) when is_integer(rate_bp),
+  def tax(%{tax_rate_bp: rate_bp} = item) when is_integer(rate_bp),
     do: Money.tax_bp(amount(item), QuantumBilling.Tax.effective_bp(item))
 
-  def tax(%__MODULE__{tax_rate: tax_rate} = item) when is_integer(tax_rate) do
+  def tax(%{tax_rate: tax_rate} = item) when is_integer(tax_rate) do
     Money.tax(amount(item), tax_rate)
   end
 

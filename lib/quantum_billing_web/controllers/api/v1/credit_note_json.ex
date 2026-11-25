@@ -7,7 +7,7 @@ defmodule QuantumBillingWeb.API.V1.CreditNoteJSON do
 
   alias QuantumBilling.CreditNotes.CreditNote
 
-  @fields ~w(id number type reason status amounts invoice client_id created_at updated_at)a
+  @fields ~w(id number date type reason status amounts invoice client_id created_at updated_at)a
 
   @doc "The fields of a note, for the test that pins them."
   def fields, do: @fields
@@ -22,6 +22,8 @@ defmodule QuantumBillingWeb.API.V1.CreditNoteJSON do
     %{
       id: note.id,
       number: note.note_number,
+      # The note's date where the business is; GSTR-1 reports it by this.
+      date: note.note_date,
       type: note.note_type |> to_string() |> String.downcase(),
       reason: note.reason,
       status: note.status,

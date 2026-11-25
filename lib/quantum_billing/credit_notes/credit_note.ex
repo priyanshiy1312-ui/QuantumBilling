@@ -12,7 +12,9 @@ defmodule QuantumBilling.CreditNotes.CreditNote do
   alias QuantumBilling.Money.Paise
 
   schema "credit_notes" do
+    # Both set by `CreditNotes` from the business's series and timezone; never cast.
     field :note_number, :string
+    field :note_date, :date
     field :note_type, :string, default: "Credit"
     field :reason, :string
     field :subtotal, Paise, default: 0
@@ -35,10 +37,14 @@ defmodule QuantumBilling.CreditNotes.CreditNote do
   @types ~w(Credit Debit)
   @statuses ~w(Issued Cancelled Applied)
 
-  def changeset(credit_note, attrs) do
+  @doc """
+  `trusted` carries `note_number` and `note_date`, which the caller takes from
+  the business's series and timezone; they are never read from `attrs`. Its
+  `creditable`, in paise, is the most a credit note on the invoice may be.
+  """
+  def changeset(credit_note, attrs, trusted \\ %{}) do
     credit_note
     |> cast(attrs, [
-      :note_number,
       :note_type,
       :invoice_id,
       :client_id,
@@ -48,13 +54,43 @@ defmodule QuantumBilling.CreditNotes.CreditNote do
       :grand_total,
       :status
     ])
-    |> validate_required([:note_number, :note_type, :invoice_id, :client_id, :grand_total])
+    |> change(Map.take(trusted, [:note_number, :note_date]))
+    |> validate_required([
+      :note_number,
+      :note_date,
+      :note_type,
+      :invoice_id,
+      :client_id,
+      :grand_total
+    ])
+    # The last guard before GSTR-1, whose portal refuses anything else.
+    |> validate_change(:note_number, fn :note_number, number ->
+      if QuantumBilling.Compliance.document_number_valid?(number),
+        do: [],
+        else: [note_number: "must be at most 16 letters, numbers, - or /"]
+    end)
     |> validate_number(:grand_total, greater_than_or_equal_to: 0)
+    |> validate_creditable(Map.get(trusted, :creditable))
     |> validate_inclusion(:note_type, @types)
     |> validate_inclusion(:status, @statuses)
     |> CustomFields.cast("credit_note", attrs)
     |> foreign_key_constraint(:invoice_id)
     |> foreign_key_constraint(:client_id)
     |> unique_constraint(:note_number)
+  end
+
+  # A debit note adds to the invoice, so only a credit note has a ceiling.
+  defp validate_creditable(changeset, nil), do: changeset
+
+  defp validate_creditable(changeset, creditable) do
+    if get_field(changeset, :note_type) == "Credit" do
+      validate_number(changeset, :grand_total,
+        less_than_or_equal_to: creditable,
+        message:
+          "is more than the #{QuantumBilling.Money.to_input(creditable)} left to credit on this invoice"
+      )
+    else
+      changeset
+    end
   end
 end

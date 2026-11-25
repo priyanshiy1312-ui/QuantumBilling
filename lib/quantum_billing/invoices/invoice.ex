@@ -46,6 +46,8 @@ defmodule QuantumBilling.Invoices.Invoice do
     "E-Invoice Generated",
     "E-Invoice Failed",
     "Paid",
+    # Credit notes have brought it to nothing owed.
+    "Credited",
     "Cancelled"
   ]
 
@@ -134,6 +136,8 @@ defmodule QuantumBilling.Invoices.Invoice do
 
     belongs_to :template, QuantumBilling.Templates.InvoiceTemplate
     belongs_to :client, QuantumBilling.Clients.Client
+    # The quotation this invoice was converted from. Set only by Invoices.create_invoice/2.
+    belongs_to :quotation, QuantumBilling.Quotations.Quotation
     has_many :items, InvoiceItem, on_replace: :delete, preload_order: [asc: :position]
 
     timestamps(type: :utc_datetime)
@@ -153,7 +157,7 @@ defmodule QuantumBilling.Invoices.Invoice do
   # passed as `trusted`, never read from params.
   @trusted ~w(invoice_number company_name company_address company_gstin company_state
               status template_id layout_xml tax_regime prices_include_tax
-              round_to_whole_units company_tax_number)a
+              round_to_whole_units company_tax_number quotation_id)a
 
   @doc """
   Builds an invoice changeset, including its line items.
@@ -184,6 +188,8 @@ defmodule QuantumBilling.Invoices.Invoice do
     |> unique_constraint(:invoice_number,
       message: "has already been used — check the numbering series in Settings"
     )
+    # Backstop for converting a quotation twice at once.
+    |> unique_constraint(:quotation_id, message: "this quotation has already been converted")
   end
 
   # A new invoice bills in the business currency unless one was given.
@@ -221,7 +227,8 @@ defmodule QuantumBilling.Invoices.Invoice do
   end
 
   # India GST needs a state for the place of supply; VAT does not use one.
-  defp validate_place_of_supply(changeset) do
+  @doc false
+  def validate_place_of_supply(changeset) do
     if vat?(changeset) do
       changeset
     else
@@ -232,7 +239,8 @@ defmodule QuantumBilling.Invoices.Invoice do
     end
   end
 
-  defp validate_client_tax_number(changeset) do
+  @doc false
+  def validate_client_tax_number(changeset) do
     changeset
     |> update_change(:client_tax_number, &Tax.normalize_tax_number/1)
     |> validate_length(:client_tax_number, max: 30)
@@ -300,7 +308,8 @@ defmodule QuantumBilling.Invoices.Invoice do
     end
   end
 
-  defp validate_has_items(changeset) do
+  @doc false
+  def validate_has_items(changeset) do
     case get_field(changeset, :items) do
       [] -> add_error(changeset, :items, "add at least one item")
       nil -> add_error(changeset, :items, "add at least one item")

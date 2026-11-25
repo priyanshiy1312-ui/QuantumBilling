@@ -35,9 +35,23 @@ defmodule QuantumBillingWeb.API.ActionParams do
   def empty(_body), do: {:error, %{"body" => ["must be a JSON object"]}}
 
   @doc """
+  Emailing a quotation: `%{"to" => address}`, or `{:ok, nil}` with no `to`,
+  for the quotation's own client email.
+  """
+  def quotation_email(%{} = body) do
+    with :ok <- only(body, ~w(to)) do
+      if Map.has_key?(body, "to"), do: text(body, "to", 160), else: {:ok, nil}
+    end
+  end
+
+  def quotation_email(_body), do: {:error, %{"body" => ["must be a JSON object"]}}
+
+  @doc """
   A credit or debit note: `type` ("credit" or "debit"), `reason`, and the
-  amounts in paise. Amounts left out default to the invoice's own, as in the
-  application. Returns attrs for `CreditNotes.create_credit_note_for_invoice/2`,
+  amounts in paise. A total left out defaults to what can still be credited
+  (for a debit note, the invoice's total), and a taxable value or tax left out
+  is taken from the total in the invoice's proportion, as in the application.
+  A credit note over what can still be credited is refused. Returns attrs for `CreditNotes.create_credit_note_for_invoice/2`,
   whose amounts are rupees.
   """
   def credit_note(%{} = body) do

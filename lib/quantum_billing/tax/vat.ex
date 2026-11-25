@@ -64,9 +64,9 @@ defmodule QuantumBilling.Tax.VAT do
 
   defp group_key(_item, true), do: {"Reverse charge", "reverse_charge", 0}
 
-  defp group_key(%InvoiceItem{tax_rate_bp: nil}, false), do: {"No VAT", "out_of_scope", 0}
+  defp group_key(%{tax_rate_bp: nil}, false), do: {"No VAT", "out_of_scope", 0}
 
-  defp group_key(%InvoiceItem{} = item, false) do
+  defp group_key(%{} = item, false) do
     category = item.tax_category || "standard"
     {item.tax_name || Tax.percent_label(item.tax_rate_bp), category, Tax.effective_bp(item)}
   end

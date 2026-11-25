@@ -201,7 +201,7 @@ defmodule QuantumBillingWeb.SharedComponents do
     """
   end
 
-  @doc "A status pill for invoice and client statuses; unknown ones are neutral."
+  @doc "A status pill for invoice, quotation and client statuses; unknown ones are neutral."
   attr :status, :string, required: true
 
   def status_badge(assigns) do
@@ -217,12 +217,14 @@ defmodule QuantumBillingWeb.SharedComponents do
   @pending "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300"
   @negative "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300"
   @neutral "border-base-300 bg-base-200 text-base-content/60"
+  @informative "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-300"
 
   defp status_badge_class("E-Invoice Generated"), do: @positive
   defp status_badge_class("Pending E-Invoice"), do: @pending
   defp status_badge_class("Draft"), do: @neutral
   defp status_badge_class("E-Invoice Failed"), do: @negative
   defp status_badge_class("Cancelled"), do: @neutral
+  defp status_badge_class("Credited"), do: @informative
   defp status_badge_class("Active"), do: @positive
   defp status_badge_class("Inactive"), do: @pending
   defp status_badge_class("Blocked"), do: @negative
@@ -231,6 +233,10 @@ defmodule QuantumBillingWeb.SharedComponents do
   defp status_badge_class("Done"), do: @positive
   defp status_badge_class("Pending"), do: @pending
   defp status_badge_class("Overdue"), do: @negative
+  # Quotations.
+  defp status_badge_class("Sent"), do: @informative
+  defp status_badge_class("Accepted"), do: @positive
+  defp status_badge_class("Declined"), do: @negative
   defp status_badge_class(_other), do: @neutral
 
   @doc "Says whether a portal result was filed for real or only simulated."
